@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { MapPin, Search, Target, Navigation } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast as sonnerToast } from "@/components/ui/sonner";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -36,10 +36,11 @@ L.Icon.Default.mergeOptions({
 });
 
 // Component for handling map clicks
-const MapClickHandler: React.FC<{ onLocationSelect: (lat: number, lng: number) => void }> = ({ onLocationSelect }) => {
+const MapClickHandler: React.FC<{ onLocationSelect: (lat: number, lng: number) => void; onMapClick: () => void }> = ({ onLocationSelect, onMapClick }) => {
   useMapEvents({
     click(e) {
       onLocationSelect(e.latlng.lat, e.latlng.lng);
+      onMapClick(); // Close suggestions when map is clicked
     },
   });
   return null;
@@ -53,7 +54,15 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, placeh
   const [searchSuggestions, setSearchSuggestions] = useState<SearchResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const mapRef = useRef<L.Map | null>(null);
-  const { toast } = useToast();
+
+  // Invalidate map size when dialog opens
+  useEffect(() => {
+    if (isMapOpen && mapRef.current) {
+      setTimeout(() => {
+        mapRef.current?.invalidateSize();
+      }, 100);
+    }
+  }, [isMapOpen]);
 
   // Search suggestions with debounce
   useEffect(() => {
@@ -72,7 +81,13 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, placeh
   const fetchSearchSuggestions = async () => {
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&countrycodes=br&limit=5&addressdetails=1`
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&countrycodes=br&limit=5&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'SOANT Drone Management System',
+            'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8'
+          }
+        }
       );
       const data: SearchResult[] = await response.json();
       setSearchSuggestions(data);
@@ -96,19 +111,25 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, placeh
 
   const handleMapClick = async (lat: number, lng: number) => {
     setCoordinates({ lat, lng });
+    setShowSuggestions(false); // Close suggestions when map is clicked
     
     // Reverse geocoding para obter o endereço
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'SOANT Drone Management System',
+            'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8'
+          }
+        }
       );
       const data = await response.json();
       const address = data.display_name || `Local selecionado`;
       const locationString = `${address} (Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)})`;
       onChange(locationString);
       
-      toast({
-        title: "Local selecionado",
+      sonnerToast("Local selecionado", {
         description: "Clique em 'Confirmar Local' para salvar",
       });
     } catch (error) {
@@ -124,7 +145,13 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, placeh
     setIsSearching(true);
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&countrycodes=br&limit=1`
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&countrycodes=br&limit=1`,
+        {
+          headers: {
+            'User-Agent': 'SOANT Drone Management System',
+            'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8'
+          }
+        }
       );
       const data = await response.json();
 
@@ -137,22 +164,17 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, placeh
         const locationString = `${location.display_name} (Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)})`;
         onChange(locationString);
         
-        toast({
-          title: "Localização encontrada",
+        sonnerToast("Localização encontrada", {
           description: location.display_name,
         });
       } else {
-        toast({
-          title: "Localização não encontrada",
+        sonnerToast("Localização não encontrada", {
           description: "Tente um termo mais específico",
-          variant: "destructive",
         });
       }
     } catch (error) {
-      toast({
-        title: "Erro na busca",
+      sonnerToast("Erro na busca", {
         description: "Não foi possível buscar a localização",
-        variant: "destructive",
       });
     } finally {
       setIsSearching(false);
@@ -162,10 +184,8 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, placeh
   // Obter localização atual do usuário
   const getCurrentLocation = () => {
     if (!navigator.geolocation) {
-      toast({
-        title: "Geolocalização não suportada",
+      sonnerToast("Geolocalização não suportada", {
         description: "Seu navegador não suporta geolocalização",
-        variant: "destructive",
       });
       return;
     }
@@ -179,32 +199,34 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, placeh
         // Reverse geocoding para obter o endereço
         try {
           const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`,
+            {
+              headers: {
+                'User-Agent': 'SOANT Drone Management System',
+                'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8'
+              }
+            }
           );
           const data = await response.json();
           const address = data.display_name || `Localização atual`;
           const locationString = `${address} (Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)})`;
           onChange(locationString);
           
-          toast({
-            title: "Localização obtida",
+          sonnerToast("Localização obtida", {
             description: "Sua localização atual foi definida com sucesso",
           });
         } catch (error) {
           const locationString = `Localização atual (Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)})`;
           onChange(locationString);
           
-          toast({
-            title: "Localização obtida",
+          sonnerToast("Localização obtida", {
             description: "Coordenadas obtidas com sucesso",
           });
         }
       },
       (error) => {
-        toast({
-          title: "Erro ao obter localização",
+        sonnerToast("Erro ao obter localização", {
           description: "Não foi possível obter sua localização atual",
-          variant: "destructive",
         });
       }
     );
@@ -213,8 +235,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, placeh
   const handleConfirmLocation = () => {
     setIsMapOpen(false);
     if (coordinates) {
-      toast({
-        title: "Local confirmado",
+      sonnerToast("Local confirmado", {
         description: "Local do voo atualizado com sucesso",
       });
     }
@@ -298,7 +319,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, placeh
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   />
-                  <MapClickHandler onLocationSelect={handleMapClick} />
+                  <MapClickHandler onLocationSelect={handleMapClick} onMapClick={() => setShowSuggestions(false)} />
                   {coordinates && (
                     <Marker position={[coordinates.lat, coordinates.lng]} />
                   )}

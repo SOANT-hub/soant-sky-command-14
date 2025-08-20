@@ -1,10 +1,13 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { MapPin, Search, Target } from "lucide-react";
+import { MapPin, Search, Target, Navigation } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 interface LocationPickerProps {
   value: string;
@@ -17,12 +20,102 @@ interface LatLng {
   lng: number;
 }
 
+interface SearchResult {
+  display_name: string;
+  lat: string;
+  lon: string;
+  importance: number;
+}
+
+// Fix leaflet marker icons
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+// Component for handling map clicks
+const MapClickHandler: React.FC<{ onLocationSelect: (lat: number, lng: number) => void }> = ({ onLocationSelect }) => {
+  useMapEvents({
+    click(e) {
+      onLocationSelect(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+};
+
 const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, placeholder = "Digite o local do voo" }) => {
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [coordinates, setCoordinates] = useState<LatLng | null>(null);
+  const [searchSuggestions, setSearchSuggestions] = useState<SearchResult[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const mapRef = useRef<L.Map | null>(null);
   const { toast } = useToast();
+
+  // Search suggestions with debounce
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchQuery.length > 2) {
+        fetchSearchSuggestions();
+      } else {
+        setSearchSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
+
+  const fetchSearchSuggestions = async () => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&countrycodes=br&limit=5&addressdetails=1`
+      );
+      const data: SearchResult[] = await response.json();
+      setSearchSuggestions(data);
+      setShowSuggestions(data.length > 0);
+    } catch (error) {
+      setSearchSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const selectSuggestion = (suggestion: SearchResult) => {
+    const lat = parseFloat(suggestion.lat);
+    const lng = parseFloat(suggestion.lon);
+    setCoordinates({ lat, lng });
+    setSearchQuery(suggestion.display_name);
+    setShowSuggestions(false);
+    
+    const locationString = `${suggestion.display_name} (Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)})`;
+    onChange(locationString);
+  };
+
+  const handleMapClick = async (lat: number, lng: number) => {
+    setCoordinates({ lat, lng });
+    
+    // Reverse geocoding para obter o endereço
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`
+      );
+      const data = await response.json();
+      const address = data.display_name || `Local selecionado`;
+      const locationString = `${address} (Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)})`;
+      onChange(locationString);
+      
+      toast({
+        title: "Local selecionado",
+        description: "Clique em 'Confirmar Local' para salvar",
+      });
+    } catch (error) {
+      const locationString = `Local selecionado (Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)})`;
+      onChange(locationString);
+    }
+  };
 
   // Geocoding usando Nominatim API
   const searchLocation = async () => {
@@ -148,17 +241,37 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, placeh
             </DialogHeader>
             <div className="space-y-4">
               {/* Barra de Busca */}
-              <div className="flex gap-2">
-                <Input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Buscar endereço ou local..."
-                  onKeyPress={(e) => e.key === "Enter" && searchLocation()}
-                  className="flex-1"
-                />
-                <Button onClick={searchLocation} disabled={isSearching} size="icon" title="Buscar">
-                  <Search className="h-4 w-4" />
-                </Button>
+              <div className="relative">
+                <div className="flex gap-2">
+                  <Input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Buscar endereço ou local..."
+                    onKeyPress={(e) => e.key === "Enter" && searchLocation()}
+                    className="flex-1"
+                  />
+                  <Button onClick={searchLocation} disabled={isSearching} size="icon" title="Buscar">
+                    <Search className="h-4 w-4" />
+                  </Button>
+                </div>
+                
+                {/* Sugestões de busca */}
+                {showSuggestions && searchSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-background border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                    {searchSuggestions.map((suggestion, index) => (
+                      <button
+                        key={index}
+                        onClick={() => selectSuggestion(suggestion)}
+                        className="w-full px-3 py-2 text-left hover:bg-muted text-sm border-b last:border-b-0"
+                      >
+                        <div className="font-medium">{suggestion.display_name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          Lat: {parseFloat(suggestion.lat).toFixed(4)}, Lng: {parseFloat(suggestion.lon).toFixed(4)}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Botão para localização atual */}
@@ -173,7 +286,31 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, placeh
                 </Button>
               </div>
 
-              {/* Exibição das coordenadas */}
+              {/* Mapa Interativo */}
+              <div className="h-64 border rounded-lg overflow-hidden">
+                <MapContainer
+                  center={coordinates || { lat: -14.235, lng: -51.9253 }} // Centro do Brasil
+                  zoom={coordinates ? 15 : 4}
+                  style={{ height: "100%", width: "100%" }}
+                  ref={mapRef}
+                >
+                  <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  />
+                  <MapClickHandler onLocationSelect={handleMapClick} />
+                  {coordinates && (
+                    <Marker position={[coordinates.lat, coordinates.lng]} />
+                  )}
+                </MapContainer>
+              </div>
+              
+              <div className="text-center text-sm text-muted-foreground">
+                <Navigation className="inline h-4 w-4 mr-1" />
+                Clique no mapa para selecionar um local
+              </div>
+
+              {/* Exibição das coordenadas selecionadas */}
               {coordinates && (
                 <div className="p-4 bg-muted rounded-lg border">
                   <h4 className="font-medium mb-2">Coordenadas selecionadas:</h4>

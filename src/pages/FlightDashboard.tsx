@@ -1,6 +1,7 @@
+
 import DashboardStats from "@/components/DashboardStats";
 import FlightRegistration from "@/components/FlightRegistration";
-import FlightMap from "@/components/FlightMap";
+import SimpleFlightMap from "@/components/SimpleFlightMap";
 import FlightHistory from "@/components/FlightHistory";
 import heroImage from "@/assets/hero-drone-control.jpg";
 
@@ -34,7 +35,9 @@ const FlightDashboard = () => {
         <DashboardStats />
         
         {/* Flight Map */}
-        <FlightMap />
+        <div className="mt-8">
+          <SimpleFlightMap />
+        </div>
         
         {/* Flight Registration */}
         <div className="mt-8">

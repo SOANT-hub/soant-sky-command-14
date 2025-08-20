@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import FlightDashboard from "./pages/FlightDashboard";
 import ProjectDashboard from "./pages/ProjectDashboard";
 import EquipmentDashboard from "./pages/EquipmentDashboard";
@@ -20,18 +21,20 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AppLayout>
-          <Routes>
-            <Route path="/" element={<FlightDashboard />} />
-            <Route path="/flights" element={<FlightDashboard />} />
-            <Route path="/projects" element={<ProjectDashboard />} />
-            <Route path="/equipments" element={<EquipmentDashboard />} />
-            <Route path="/pilots" element={<PilotDashboard />} />
-            <Route path="/tasks" element={<TaskDashboard />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AppLayout>
+        <ErrorBoundary>
+          <AppLayout>
+            <Routes>
+              <Route path="/" element={<FlightDashboard />} />
+              <Route path="/flights" element={<FlightDashboard />} />
+              <Route path="/projects" element={<ProjectDashboard />} />
+              <Route path="/equipments" element={<EquipmentDashboard />} />
+              <Route path="/pilots" element={<PilotDashboard />} />
+              <Route path="/tasks" element={<TaskDashboard />} />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AppLayout>
+        </ErrorBoundary>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

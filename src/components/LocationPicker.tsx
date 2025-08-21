@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { MapPin, Search, Target, Navigation } from "lucide-react";
 import { toast as sonnerToast } from "@/components/ui/sonner";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
@@ -270,16 +270,16 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, placeh
           placeholder={placeholder}
           className="flex-1"
         />
-        <Dialog open={isMapOpen} onOpenChange={setIsMapOpen}>
-          <DialogTrigger asChild>
+        <Sheet open={isMapOpen} onOpenChange={setIsMapOpen}>
+          <SheetTrigger asChild>
             <Button variant="outline" size="icon" title="Selecionar localização">
               <MapPin className="h-4 w-4" />
             </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Selecionar Local do Voo</DialogTitle>
-            </DialogHeader>
+          </SheetTrigger>
+          <SheetContent side="top" className="inset-x-0 top-0 h-[85vh] w-full sm:max-w-none">
+            <SheetHeader>
+              <SheetTitle>Selecionar Local do Voo</SheetTitle>
+            </SheetHeader>
             <div className="space-y-4">
               {/* Barra de Busca */}
               <div className="relative">
@@ -328,7 +328,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, placeh
               </div>
 
               {/* Mapa Interativo */}
-              <div className="h-64 border rounded-lg overflow-hidden">
+              <div className="h-[60vh] border rounded-lg overflow-hidden">
                 {isMapOpen && (
                   <MapContainer
                     key={mapKey}
@@ -397,8 +397,8 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, placeh
                 </Button>
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
+          </SheetContent>
+        </Sheet>
       </div>
     </div>
   );

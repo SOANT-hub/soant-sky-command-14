@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -28,12 +28,18 @@ interface SearchResult {
 }
 
 // Fix leaflet marker icons
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
+const fixLeafletIcons = () => {
+  try {
+    delete (L.Icon.Default.prototype as any)._getIconUrl;
+    L.Icon.Default.mergeOptions({
+      iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+      iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+    });
+  } catch (error) {
+    console.warn('Leaflet icons already configured');
+  }
+};
 
 // Component for handling map clicks
 const MapClickHandler: React.FC<{ onLocationSelect: (lat: number, lng: number) => void; onMapClick: () => void }> = ({ onLocationSelect, onMapClick }) => {
@@ -53,14 +59,25 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, placeh
   const [coordinates, setCoordinates] = useState<LatLng | null>(null);
   const [searchSuggestions, setSearchSuggestions] = useState<SearchResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [mapKey, setMapKey] = useState(0);
   const mapRef = useRef<L.Map | null>(null);
 
-  // Invalidate map size when dialog opens
+  // Initialize Leaflet icons
   useEffect(() => {
-    if (isMapOpen && mapRef.current) {
+    fixLeafletIcons();
+  }, []);
+
+  // Handle map initialization when dialog opens
+  useEffect(() => {
+    if (isMapOpen) {
+      // Force remount of map component to avoid render issues
+      setMapKey(prev => prev + 1);
+      // Delay map size validation
       setTimeout(() => {
-        mapRef.current?.invalidateSize();
-      }, 100);
+        if (mapRef.current) {
+          mapRef.current.invalidateSize();
+        }
+      }, 200);
     }
   }, [isMapOpen]);
 
@@ -109,12 +126,12 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, placeh
     onChange(locationString);
   };
 
-  const handleMapClick = async (lat: number, lng: number) => {
-    setCoordinates({ lat, lng });
-    setShowSuggestions(false); // Close suggestions when map is clicked
-    
-    // Reverse geocoding para obter o endereço
+  const handleMapClick = useCallback(async (lat: number, lng: number) => {
     try {
+      setCoordinates({ lat, lng });
+      setShowSuggestions(false);
+      
+      // Reverse geocoding para obter o endereço
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`,
         {
@@ -135,8 +152,11 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, placeh
     } catch (error) {
       const locationString = `Local selecionado (Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)})`;
       onChange(locationString);
+      sonnerToast("Local selecionado", {
+        description: "Coordenadas definidas com sucesso",
+      });
     }
-  };
+  }, [onChange]);
 
   // Geocoding usando Nominatim API
   const searchLocation = async () => {
@@ -309,21 +329,31 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, placeh
 
               {/* Mapa Interativo */}
               <div className="h-64 border rounded-lg overflow-hidden">
-                <MapContainer
-                  center={coordinates || { lat: -14.235, lng: -51.9253 }} // Centro do Brasil
-                  zoom={coordinates ? 15 : 4}
-                  style={{ height: "100%", width: "100%" }}
-                  ref={mapRef}
-                >
-                  <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  />
-                  <MapClickHandler onLocationSelect={handleMapClick} onMapClick={() => setShowSuggestions(false)} />
-                  {coordinates && (
-                    <Marker position={[coordinates.lat, coordinates.lng]} />
-                  )}
-                </MapContainer>
+                {isMapOpen && (
+                  <MapContainer
+                    key={mapKey}
+                    center={coordinates || { lat: -14.235, lng: -51.9253 }}
+                    zoom={coordinates ? 15 : 4}
+                    style={{ height: "100%", width: "100%" }}
+                    ref={(mapInstance) => {
+                      if (mapInstance) {
+                        mapRef.current = mapInstance;
+                        setTimeout(() => {
+                          mapInstance.invalidateSize();
+                        }, 100);
+                      }
+                    }}
+                  >
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    <MapClickHandler onLocationSelect={handleMapClick} onMapClick={() => setShowSuggestions(false)} />
+                    {coordinates && (
+                      <Marker position={[coordinates.lat, coordinates.lng]} />
+                    )}
+                  </MapContainer>
+                )}
               </div>
               
               <div className="text-center text-sm text-muted-foreground">

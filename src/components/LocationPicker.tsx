@@ -263,16 +263,21 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, placeh
 
   return (
     <div className="space-y-2">
-      <div className="flex gap-2">
+      <div className="relative">
         <Input
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className="flex-1"
+          placeholder={placeholder || "Ex: Base Aérea de Brasília, Coordenadas GPS, etc."}
+          className="pr-10"
         />
         <Sheet open={isMapOpen} onOpenChange={setIsMapOpen}>
           <SheetTrigger asChild>
-            <Button variant="outline" size="icon" title="Selecionar localização">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground hover:text-foreground"
+              title="Selecionar localização no mapa"
+            >
               <MapPin className="h-4 w-4" />
             </Button>
           </SheetTrigger>
